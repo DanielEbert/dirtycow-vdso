@@ -1,0 +1,6 @@
+#!/usr/bin/bash
+
+while true; do
+  timeout 1 make
+  sleep 0.3
+done

