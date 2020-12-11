@@ -54,10 +54,10 @@ _start:
 		js      return
 
 		;; fork
-		;mov     rax, SYS_FORK
-		;syscall
-		;test    rax, rax
-		;jne	return
+		mov     rax, SYS_FORK
+		syscall
+		test    rax, rax
+		jne	return
 
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 		;;
