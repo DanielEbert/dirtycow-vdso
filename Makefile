@@ -14,6 +14,8 @@ build:
 clean:
 	rm -rf libs
 	rm -rf obj
+	rm payload
+	rm payload.h
 
 rb:
 	adb shell reboot

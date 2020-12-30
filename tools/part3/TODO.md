@@ -1,4 +1,0 @@
-- if unstable: split into multiple, first run inserts payload, second inserts pointer to payload, third removes pointer
-- write tools:
-  - dd auto skip, chown
-  - check if patched vdso
