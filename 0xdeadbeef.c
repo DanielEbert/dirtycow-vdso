@@ -86,7 +86,8 @@ static struct prologue prologues[] = {
   { "\x55\x48\x89\xe5\x66\x66\x90", 7 },
   /* push rbp; cmp edi, 1; mov rbp, rsp */
   { "\x55\x83\xff\x01\x48\x89\xe5", 7 },
-  /* push rbp; mov rbp, rsp; push r13 */
+  // the following is the function signature in the android VM
+  /* push rbp; mov rbp, rsp; push r13 */ 
   { "\x55\x48\x89\xe5\x41\x54", 6 },
 };
 

