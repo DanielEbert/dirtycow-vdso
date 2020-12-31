@@ -297,6 +297,8 @@ static void *madviseThread(void *arg_) {
 }
 
 static int debuggee(void *arg_) {
+  // The getpid() function from libc is buggy in the used version, and thus the
+  // underlying system call is directly called
   printf("debuggee() PID %ld\n", syscall(SYS_getpid));
 
   // Send SIGKILL to the parent process when this process dies.
