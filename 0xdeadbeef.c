@@ -387,8 +387,7 @@ static int exploit_helper(struct mem_arg *arg)
  * Apply vDSO patches in the correct order.
  *
  * During the backdoor step, the payload must be written before hijacking the
- * function prologue. During the restore step, the prologue must be restored
- * before removing the payload.
+ * function prologue. 
  */
 static int exploit(struct mem_arg *arg) {
   unsigned int i;
