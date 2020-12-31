@@ -333,6 +333,7 @@ static void *ptrace_thread(void *arg_) {
   arg = (struct mem_arg *)arg_;
 
   // clone_vm required, see manpage for clone, child shares the memory space with parent
+  // so that the parent knows where the vDSO mapping is located in the child.
   flags = CLONE_VM|CLONE_PTRACE;
   // clone is similar to fork. The child will execute the debuggee function.
   pid = clone(debuggee, child_stack + sizeof(child_stack) - 8, flags, arg);
