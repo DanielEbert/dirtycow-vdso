@@ -1,4 +1,6 @@
-# 0xdeadbeef
+# CVE-2016-5195 Exploit - Works with Android6.0-rc1 from the Android-x86 project
+
+Source Code is based on the work from [here](https://github.com/scumjr/dirtycow-vdso). It's modified to work with Android6.0-rc1 from the Android-x86 project.
 
 PoC for [Dirty COW](http://dirtycow.ninja/) (CVE-2016-5195).
 
